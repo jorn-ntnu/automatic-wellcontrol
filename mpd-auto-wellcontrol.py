@@ -24,8 +24,8 @@ class piController():
         self.uiLast = self.__uiInit
 
     def getOutput(self, yd, y):
-        self.yd = yd/100000
-        self.y = y/100000
+        self.yd = yd
+        self.y = y
         self.e = self.yd - self.y
         up = self.kp*self.e
         ui = self.uiLast + self.ki*self.e*self.ts
@@ -38,15 +38,15 @@ class piController():
 tags = ["SPP", "FlowRateOut", "ChokePressure", "ChokeOpening"]
 
 # Initialize simulation
-kp = -0.07
-ki = -0.0008
-sim_name = "FB Linearized P="+str(kp)+"I="+str(ki) + " init choke 10 %"
+kp = -0.000475
+ki = 0
+sim_name = "FB Linearized P="+str(kp)+"I="+str(ki)
 sim = session.create_simulation(config_name, sim_name, initial_bit_depth, 
                                 # influx_type = "based on geopressure",
                                 UseReservoirModel=True, ManualReservoirMode=False)
 sim.end_simulation_on_exiting = True
 timeStep = 1
-SIM_TIME = 2000
+SIM_TIME = 3600
 
 # Units
 FLOW_UNIT_CONV_FACTOR = 1/6e4   # l/min to m^3/s
@@ -58,13 +58,12 @@ endTime = startTime + SIM_TIME
 initialFlowRate = 2500*FLOW_UNIT_CONV_FACTOR
 initialChokeOpening = 1
 initialBopChokeOpening = 1 
-initialMudDensity = 1.33
 
 timeChange = np.array([60, 120, 180, 210, 240])
 
 # PI Controllers
 piSPP = piController(kp=kp, ki=ki, ts=1)
-piSPP.reset()
+# piSPP.reset()
 
 # Run the simulation 
 for timeStep in range(startTime, endTime):
@@ -94,14 +93,14 @@ for timeStep in range(startTime, endTime):
         bopChokeOpening = 0
     if (timeStep >= 260):
     # if (timeStep >= 260) and (timeStep < 1500):
-    if (timeStep == 300):
+        if (timeStep == 260):
             piSPP.reset()
             flowRateIn =  1000*FLOW_UNIT_CONV_FACTOR
-            chokeOpening = sim.results.ChokeOpening[timeStep-1]
+            chokeOpening = 0
             bopChokeOpening = 1
         flowRateIn =  1000*FLOW_UNIT_CONV_FACTOR
-        virtualInput = piSPP.getOutput(43*100000, sim.results.SPP[timeStep-1])
-        chokeChange = virtualInput/(np.sqrt(sim.results.ChokePressure[timeStep-1]- 1e5))
+        virtualInput = piSPP.getOutput(48.2, sim.results.SPP[timeStep-1]/PRESSURE_CONV_FACTOR)
+        chokeChange = virtualInput/(np.sqrt(sim.results.ChokePressure[timeStep-1]/PRESSURE_CONV_FACTOR- 1))
         chokeOpening = max(0, min(1, chokeChange + sim.results.ChokeOpening[timeStep-1]))
         bopChokeOpening = 1
     # if (timeStep >= 1500):
@@ -129,6 +128,9 @@ for timeStep in range(startTime, endTime):
 
     # Output simulation results
     sim.get_results(timeStep,tags)
+
+    gvf = sim.results.GasVolumeFraction[timeStep]
+    print(gvf)
 
     # Advance the simulation  
     print(timeStep)  
